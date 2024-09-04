@@ -1,119 +1,114 @@
 import streamlit as st
-from datetime import date, timedelta
 import yfinance as yf
 from prophet import Prophet
 from prophet.plot import plot_plotly
-import plotly.graph_objects as go
 import pandas as pd
 import requests
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-import plotly.express as px
+from statsmodels.tsa.arima.model import ARIMA
+import plotly.graph_objs as go
 
-# Constants
+# Configuration
 START = "2014-01-01"
-TODAY = date.today().strftime("%Y-%m-%d")
-NEWS_API_KEY = 'a3d435ee70484c19b4fdc4b3e537d9fd'  # Replace with your NewsAPI key
+TODAY = pd.to_datetime("today").strftime("%Y-%m-%d")
+STOCKS = ["AAPL", "GOOGL", "MSFT", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "JPM", "V"]
 
-# Setup
-st.title("StockPredictPy")
+# Initialize Sentiment Analyzer
+analyzer = SentimentIntensityAnalyzer()
 
-# Stock options
-stocks = ["AAPL", "GOOG", "MSFT", "GME", "AMZN", "TSLA", "NVDA", "META", "MS", "GS"]
-
-# User selection
-selected_stock = st.selectbox("Select dataset for prediction", stocks)
-
-@st.cache
+# Function to load stock data
 def load_data(ticker):
-    try:
-        data = yf.download(ticker, START, TODAY)
-        data.reset_index(inplace=True)
-        return data
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return pd.DataFrame()
+    data = yf.download(ticker, START, TODAY)
+    data.reset_index(inplace=True)
+    return data
+
+# Function to fetch news
+def get_news(stock_symbol, start_date, end_date):
+    api_key = "a3d435ee70484c19b4fdc4b3e537d9fd"  # Replace with your NewsAPI key
+    url = f"https://newsapi.org/v2/everything?q={stock_symbol}&from={start_date}&to={end_date}&sortBy=publishedAt&apiKey={api_key}"
+    response = requests.get(url)
+    articles = response.json().get('articles', [])
+    return articles
+
+# Function to perform sentiment analysis
+def analyze_sentiment(articles):
+    sentiments = [analyzer.polarity_scores(article['description'])['compound'] for article in articles if article['description']]
+    return sum(sentiments) / len(sentiments) if sentiments else 0
+
+# Function to analyze historical sentiment
+def analyze_historical_sentiment(stock_symbol, start_date, end_date):
+    dates = pd.date_range(start=start_date, end=end_date)
+    sentiments = []
+    for date in dates:
+        articles = get_news(stock_symbol, date.strftime('%Y-%m-%d'), date.strftime('%Y-%m-%d'))
+        sentiment = analyze_sentiment(articles)
+        sentiments.append({'date': date, 'sentiment': sentiment})
+    return pd.DataFrame(sentiments)
+
+# Streamlit App
+st.title("Stock Market Predictor and Sentiment Analyzer")
+
+selected_stock = st.selectbox("Select a stock for prediction", STOCKS)
 
 data = load_data(selected_stock)
+st.write(data.tail())
 
-if not data.empty:
-    st.subheader('Details')
-    st.write(data.tail())
+# Plot raw data
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="Open"))
+fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="Close"))
+fig.update_layout(title_text="Stock Price Over Time", xaxis_rangeslider_visible=True)
+st.plotly_chart(fig)
 
-    def plot_raw_data():
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="Stock Open"))
-        fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="Stock Close"))
-        fig.update_layout(title_text="Time Series Data with Rangeslider", xaxis_rangeslider_visible=True)
-        st.plotly_chart(fig)
+# Forecasting with Prophet
+n_years = st.slider("Years of prediction:", 1, 4)
+period = n_years * 365
 
-    plot_raw_data()
+df_train = data[['Date', 'Close']].rename(columns={"Date": "ds", "Close": "y"})
+m = Prophet()
+m.fit(df_train)
+future = m.make_future_dataframe(periods=period)
+forecast = m.predict(future)
 
-    # Prediction
-    n_years = st.slider("Years of prediction:", 1, 4)
-    period = n_years * 365
+st.subheader('Forecast data')
+st.write(forecast.tail())
+st.write('Forecast Plot')
+fig1 = plot_plotly(m, forecast)
+st.plotly_chart(fig1)
 
-    df_train = data[['Date', 'Close']]
-    df_train = df_train.rename(columns={"Date": "ds", "Close": "y"})
+# Forecasting with ARIMA
+st.subheader("ARIMA Forecast")
+model = ARIMA(df_train['y'], order=(5,1,0))
+model_fit = model.fit()
+forecast_arima = model_fit.forecast(steps=period)
+forecast_arima_df = pd.DataFrame({
+    'Date': pd.date_range(start=data['Date'].max(), periods=period+1, closed='right'),
+    'Forecast': forecast_arima
+})
+st.line_chart(forecast_arima_df.set_index('Date'))
 
-    m = Prophet()
-    try:
-        m.fit(df_train)
-        future = m.make_future_dataframe(periods=period)
-        forecast = m.predict(future)
+# Sentiment Analysis
+st.subheader("Sentiment Analysis")
+articles = get_news(selected_stock, TODAY, TODAY)
+avg_sentiment = analyze_sentiment(articles)
+st.write(f"Average Sentiment Score: {avg_sentiment:.2f}")
 
-        st.subheader('Forecast data')
-        st.write(forecast.tail())
+if articles:
+    for article in articles[:5]:
+        st.write(f"**{article['title']}**")
+        st.write(article['description'])
+        st.write(f"Sentiment Score: {analyzer.polarity_scores(article['description'])['compound']:.2f}")
 
-        st.write('Forecast Data')
-        fig1 = plot_plotly(m, forecast)
-        st.plotly_chart(fig1)
+# Historical Sentiment Analysis
+st.subheader("Historical Sentiment Trends")
+historical_start_date = (pd.to_datetime(TODAY) - pd.DateOffset(days=180)).strftime('%Y-%m-%d')
+historical_sentiment_df = analyze_historical_sentiment(selected_stock, historical_start_date, TODAY)
 
-        st.write('Forecast Components')
-        fig2 = m.plot_components(forecast)
-        st.write(fig2)
-    except Exception as e:
-        st.error(f"Error in forecasting: {e}")
-
-    # Sentiment Analysis with NewsAPI
-    def fetch_news(ticker, start_date, end_date):
-        url = 'https://newsapi.org/v2/everything'
-        params = {
-            'q': ticker,
-            'from': start_date,
-            'to': end_date,
-            'apiKey': NEWS_API_KEY,
-            'language': 'en',
-            'sortBy': 'relevancy'
-        }
-        response = requests.get(url, params=params)
-        news_data = response.json()
-        return news_data
-
-    def analyze_sentiment(news_articles):
-        sentiment_analyzer = SentimentIntensityAnalyzer()
-        sentiment_scores = []
-        dates = pd.date_range(start=historical_start_date, end=TODAY)
-
-        for date in dates:
-            daily_articles = [article['description'] for article in news_articles if article['publishedAt'].startswith(date.strftime("%Y-%m-%d"))]
-            if daily_articles:
-                combined_text = ' '.join(daily_articles)
-                sentiment = sentiment_analyzer.polarity_scores(combined_text)
-                sentiment_scores.append({'date': date, 'sentiment': sentiment['compound']})
-
-        return pd.DataFrame(sentiment_scores)
-
-    # Historical period setup
-    historical_start_date = (date.today() - timedelta(days=180)).strftime("%Y-%m-%d")
-    news_data = fetch_news(selected_stock, historical_start_date, TODAY)
-    articles = news_data.get('articles', [])
-    sentiment_df = analyze_sentiment(articles)
-
-    if not sentiment_df.empty:
-        st.subheader('Historical Sentiment Trends')
-
-        # Visualize sentiment trends
-        fig = px.line(sentiment_df, x='date', y='sentiment', title=f'Sentiment Trends for {selected_stock}')
-        st.plotly_chart(fig)
+if not historical_sentiment_df.empty:
+    st.write(historical_sentiment_df)
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(x=historical_sentiment_df['date'], y=historical_sentiment_df['sentiment'], mode='lines+markers'))
+    fig2.update_layout(title_text="Historical Sentiment Trends", xaxis_title="Date", yaxis_title="Sentiment Score")
+    st.plotly_chart(fig2)
 else:
-    st.error("No data available to display.")
+    st.write("No historical sentiment data available.")
