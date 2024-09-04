@@ -1,6 +1,8 @@
-streamlit==1.38.0
-yfinance
+datetime
 prophet
-numpy
 plotly
 pandas
+matplotlib
+stocknews
+yfinance
+numpy<1.24
