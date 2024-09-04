@@ -36,7 +36,8 @@ if selected_stock and selected_interval:
             # Prepare data for Prophet
             df = data.reset_index()[['Date', 'Close']]
             df.columns = ['ds', 'y']
-            
+            # Explicitly cast 'y' to float64
+            df['y'] = df['y'].astype('float64')
             # Display raw data
             st.subheader(f'{selected_stock} - Last {selected_interval} of Data')
             st.write(df.tail())
