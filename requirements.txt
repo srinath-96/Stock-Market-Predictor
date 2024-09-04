@@ -9,3 +9,4 @@ textblob
 google-cloud-language
 statsmodels
 numpy<2.0
+nltk
