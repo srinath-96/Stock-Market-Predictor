@@ -3,3 +3,4 @@ yfinance
 prophet
 pandas
 plotly
+numpy==1.26.4
