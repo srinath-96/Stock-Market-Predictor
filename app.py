@@ -15,7 +15,7 @@ import requests
 nltk.download('vader_lexicon')
 
 # Set up API key for NewsAPI
-NEWS_API_KEY = 'your_newsapi_key_here'  # Replace with your actual NewsAPI key
+NEWS_API_KEY = 'a3d435ee70484c19b4fdc4b3e537d9fd'  # Replace with your actual NewsAPI key
 NEWS_API_URL = 'https://newsapi.org/v2/everything'
 
 START = "2014-01-01"
