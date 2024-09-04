@@ -10,7 +10,8 @@ from google.cloud import language_v1
 from statsmodels.tsa.arima.model import ARIMA
 import plotly.graph_objs as go
 import plotly.express as px
-
+import nltk
+nltk.download('punkt')
 # Configuration
 START = "2014-01-01"
 TODAY = pd.to_datetime("today").strftime("%Y-%m-%d")
