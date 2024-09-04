@@ -1,133 +1,122 @@
 import streamlit as st
-from datetime import date
 import yfinance as yf
 from prophet import Prophet
 from prophet.plot import plot_plotly
-from plotly import graph_objs as go
 import pandas as pd
-import matplotlib.pyplot as plt
-from statsmodels.tsa.arima.model import ARIMA
-import numpy as np
-import nltk
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import requests
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from textblob import TextBlob
+from google.cloud import language_v1
+from statsmodels.tsa.arima.model import ARIMA
+import plotly.graph_objs as go
+import plotly.express as px
 
-nltk.download('vader_lexicon')
-
-# Set up API key for NewsAPI
-NEWS_API_KEY = 'a3d435ee70484c19b4fdc4b3e537d9fd'  # Replace with your actual NewsAPI key
-NEWS_API_URL = 'https://newsapi.org/v2/everything'
-
+# Configuration
 START = "2014-01-01"
-TODAY = date.today().strftime("%Y-%m-%d")
+TODAY = pd.to_datetime("today").strftime("%Y-%m-%d")
+STOCKS = ["AAPL", "GOOGL", "MSFT", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "JPM", "V"]
 
-st.title("StockPredictPy with Sentiment Analysis")
+# Initialize Sentiment Analyzers
+vader_analyzer = SentimentIntensityAnalyzer()
+client = language_v1.LanguageServiceClient()
 
-stocks = ("AAPL", "GOOG", "MSFT","NVDA","TSLA","META","JPM","V","GS")
-selected_stock = st.selectbox("Select dataset for prediction", stocks)
-model_type = st.selectbox("Select Model", ("Prophet", "ARIMA"))
-
-# Function to fetch real-time news headlines using NewsAPI
-def get_news_headlines(ticker):
-    params = {
-        'q': ticker,
-        'apiKey': NEWS_API_KEY,
-        'language': 'en',
-        'sortBy': 'relevancy',
-        'pageSize': 5
-    }
-    response = requests.get(NEWS_API_URL, params=params)
-    articles = response.json().get('articles', [])
-    headlines = [article['title'] for article in articles]
-    return " ".join(headlines)
-
-# Example sentiment analysis function
-def sentiment_analysis(text):
-    sid = SentimentIntensityAnalyzer()
-    sentiment = sid.polarity_scores(text)
-    return sentiment
-
+# Function to load stock data
 def load_data(ticker):
     data = yf.download(ticker, START, TODAY)
     data.reset_index(inplace=True)
     return data
 
-data_load_state = st.text("Loading data...")
+# Function to fetch historical news data
+def get_news(stock_symbol, start_date, end_date):
+    api_key = "your_news_api_key"  # Replace with your NewsAPI key
+    url = f"https://newsapi.org/v2/everything?q={stock_symbol}&from={start_date}&to={end_date}&sortBy=publishedAt&apiKey={api_key}"
+    response = requests.get(url)
+    articles = response.json().get('articles', [])
+    return articles
+
+# Sentiment Analysis Functions
+def analyze_sentiment_vader(text):
+    return vader_analyzer.polarity_scores(text)['compound']
+
+def analyze_sentiment_textblob(text):
+    return TextBlob(text).sentiment.polarity
+
+def analyze_sentiment_google(text):
+    document = language_v1.Document(content=text, type_=language_v1.Document.Type.PLAIN_TEXT)
+    sentiment = client.analyze_sentiment(document=document).document_sentiment
+    return sentiment.score
+
+# Streamlit App
+st.title("Stock Market Predictor and Sentiment Analyzer")
+
+selected_stock = st.selectbox("Select a stock for prediction", STOCKS)
+
 data = load_data(selected_stock)
-data_load_state.text("Loading data...done!")
-
-st.markdown("""
-    <style>
-    .css-1l06vq2 {
-        width: 2000px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.subheader('Details')
 st.write(data.tail())
 
-# Sentiment Analysis Section
-st.subheader('Sentiment Analysis')
-news = get_news_headlines(selected_stock)
-sentiment = sentiment_analysis(news)
-st.write(f"Sentiment for {selected_stock}: ", sentiment)
+# Plot raw data
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="Open"))
+fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="Close"))
+fig.update_layout(title_text="Stock Price Over Time", xaxis_rangeslider_visible=True)
+st.plotly_chart(fig)
 
-def plot_raw_data():
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="stock_open"))
-    fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="stock_close"))
-    fig.layout.update(title_text="Time Series data with Rangeslider", xaxis_rangeslider_visible=True)
-    st.plotly_chart(fig)
-
-plot_raw_data()
-
+# Forecasting with Prophet
 n_years = st.slider("Years of prediction:", 1, 4)
 period = n_years * 365
 
-# Model selection and prediction
-if model_type == "Prophet":
-    df_train = data[['Date', 'Close']]
-    df_train = df_train.rename(columns={"Date": "ds", "Close": "y"})
+df_train = data[['Date', 'Close']].rename(columns={"Date": "ds", "Close": "y"})
+m = Prophet()
+m.fit(df_train)
+future = m.make_future_dataframe(periods=period)
+forecast = m.predict(future)
 
-    m = Prophet()
-    m.fit(df_train)
-    future = m.make_future_dataframe(periods=period)
-    forecast = m.predict(future)
+st.subheader('Prophet Forecast')
+st.write(forecast.tail())
+fig1 = plot_plotly(m, forecast)
+st.plotly_chart(fig1)
 
-    st.subheader('Forecast data')
-    st.write(forecast.tail())
+# Forecasting with ARIMA
+st.subheader("ARIMA Forecast")
+model = ARIMA(df_train['y'], order=(5,1,0))
+model_fit = model.fit()
+forecast_arima = model_fit.forecast(steps=period)
+forecast_arima_df = pd.DataFrame({
+    'Date': pd.date_range(start=data['Date'].max(), periods=period+1, closed='right'),
+    'Forecast': forecast_arima
+})
+st.line_chart(forecast_arima_df.set_index('Date'))
 
-    st.write('Forecast Data')
-    fig1 = plot_plotly(m, forecast)
-    st.plotly_chart(fig1)
+# Historical Sentiment Analysis
+st.subheader("Historical Sentiment Trends")
+historical_data = get_news(selected_stock, START, TODAY)
+sentiments = {
+    'Date': [],
+    'VADER Sentiment': [],
+    'TextBlob Sentiment': [],
+    'Google Sentiment': []
+}
 
-    st.write('Forecast Components')
-    fig2 = m.plot_components(forecast)
-    st.write(fig2)
+for article in historical_data:
+    date = pd.to_datetime(article['publishedAt']).date()
+    description = article['description'] or ''
+    
+    sentiments['Date'].append(date)
+    sentiments['VADER Sentiment'].append(analyze_sentiment_vader(description))
+    sentiments['TextBlob Sentiment'].append(analyze_sentiment_textblob(description))
+    sentiments['Google Sentiment'].append(analyze_sentiment_google(description))
 
-elif model_type == "ARIMA":
-    df_train = data[['Date', 'Close']]
-    df_train.set_index('Date', inplace=True)
+sentiments_df = pd.DataFrame(sentiments)
 
-    # Fit ARIMA model
-    model = ARIMA(df_train, order=(5, 1, 0))
-    model_fit = model.fit()
-    st.subheader('ARIMA Model Summary')
-    st.text(model_fit.summary())
+fig2 = px.line(sentiments_df, x='Date', y=['VADER Sentiment', 'TextBlob Sentiment', 'Google Sentiment'], title='Sentiment Trends')
+st.plotly_chart(fig2)
 
-    # Forecast
-    forecast = model_fit.forecast(steps=period)
-    forecast_dates = pd.date_range(start=df_train.index[-1], periods=period)
-    forecast_df = pd.DataFrame({'Date': forecast_dates, 'Close': forecast})
-    forecast_df.set_index('Date', inplace=True)
-
-    st.subheader('Forecast data')
-    st.write(forecast_df.tail())
-
-    # Plot ARIMA forecast
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df_train.index, y=df_train['Close'], name="Actual"))
-    fig.add_trace(go.Scatter(x=forecast_df.index, y=forecast_df['Close'], name="Forecast"))
-    fig.layout.update(title_text="ARIMA Forecast", xaxis_rangeslider_visible=True)
-    st.plotly_chart(fig)
+# Display news and sentiment scores
+st.subheader("Recent News and Sentiment Analysis")
+for article in historical_data[:5]:
+    st.write(f"**{article['title']}**")
+    st.write(article['description'])
+    st.write(f"VADER Sentiment Score: {analyze_sentiment_vader(article['description']):.2f}")
+    st.write(f"TextBlob Sentiment Score: {analyze_sentiment_textblob(article['description']):.2f}")
+    st.write(f"Google Sentiment Score: {analyze_sentiment_google(article['description']):.2f}")
+    st.write("---")
