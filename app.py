@@ -23,7 +23,7 @@ TODAY = date.today().strftime("%Y-%m-%d")
 
 st.title("StockPredictPy with Sentiment Analysis")
 
-stocks = ("AAPL", "GOOG", "MSFT", "GME", "AMZN", "TSLA", "BTC-USD", "ETH-USD", "DOGE-USD", "ADA-USD", "XRP-USD", "A", "AA", "AACG", "AACI", "AAGR", "AAL", "AAMC", "AAME", "AAN", "AAOI", "AAON", "AAP", "AAPL", "AAT", "AAU", "AAWW", "AB", "ABB", "ABBV", "ABC", "ABCB", "ABCL", "ABCM", "ABEO", "ABEV", "ABG", "ABIO", "ABM", "ABMD", "ABNB", "ABOS", "ABR", "ABST", "ABT", "ABTX", "ABUS", "AC", "ACA", "ACAC", "ACAD", "ACAH", "ACB", "ACBI", "ACC", "ACCD", "ACCO", "ACEL", "ACER", "ACET", "ACEV", "ACGL", "ACH", "ACHC", "ACHL", "ACHV", "ACI", "ACIA", "ACIC", "ACII", "ACIU", "ACIW", "ACKIT", "ACLS", "ACM", "ACMR", "ACN", "ACNB", "ACND", "ACOR", "ACP", "ACR", "ACRE", "ACRS", "ACRX", "ACST", "ACTC", "ACTG", "ACU", "ACV", "ACVA", "ACVF", "ACVX", "ACWI", "ACWX", "ACXM", "ACY", "ADAG", "ADAP", "ADBE", "ADC", "ADCT", "ADES", "ADEX", "ADF", "ADFI", "ADI", "ADIL", "ADM", "ADMA", "ADME", "ADMP", "ADMS", "ADN", "ADNT", "ADOC", "ADP", "ADPT", "ADRA", "ADRO", "ADS", "ADSK", "ADT", "ADTN", "ADTX", "ADUS", "ADV", "ADVM", "ADX", "ADXS", "AE", "AEE", "AEG", "AEGN", "AEHL", "AEHR", "AEI", "AEIS", "AEL", "AEM", "AEMD", "AEO", "AEP", "AER","ZYME", "ZYNE", "ZYXI", "ZZ", "ZZZ","ZETA", "ZEO", "ZEUS")
+stocks = ("AAPL", "GOOG", "MSFT","NVDA","TSLA","META","JPM","V","GS")
 selected_stock = st.selectbox("Select dataset for prediction", stocks)
 model_type = st.selectbox("Select Model", ("Prophet", "ARIMA"))
 
