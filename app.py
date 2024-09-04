@@ -23,9 +23,9 @@ def load_data(ticker):
     return data
 
 # Function to fetch news
-def get_news(stock_symbol, start_date, end_date):
+def get_news(stock_symbol):
     api_key = "a3d435ee70484c19b4fdc4b3e537d9fd"  # Replace with your NewsAPI key
-    url = f"https://newsapi.org/v2/everything?q={stock_symbol}&from={start_date}&to={end_date}&sortBy=publishedAt&apiKey={api_key}"
+    url = f"https://newsapi.org/v2/everything?q={stock_symbol}&sortBy=publishedAt&apiKey={api_key}"
     response = requests.get(url)
     articles = response.json().get('articles', [])
     return articles
@@ -34,16 +34,6 @@ def get_news(stock_symbol, start_date, end_date):
 def analyze_sentiment(articles):
     sentiments = [analyzer.polarity_scores(article['description'])['compound'] for article in articles if article['description']]
     return sum(sentiments) / len(sentiments) if sentiments else 0
-
-# Function to analyze historical sentiment
-def analyze_historical_sentiment(stock_symbol, start_date, end_date):
-    dates = pd.date_range(start=start_date, end=end_date)
-    sentiments = []
-    for date in dates:
-        articles = get_news(stock_symbol, date.strftime('%Y-%m-%d'), date.strftime('%Y-%m-%d'))
-        sentiment = analyze_sentiment(articles)
-        sentiments.append({'date': date, 'sentiment': sentiment})
-    return pd.DataFrame(sentiments)
 
 # Streamlit App
 st.title("Stock Market Predictor and Sentiment Analyzer")
@@ -89,7 +79,7 @@ st.line_chart(forecast_arima_df.set_index('Date'))
 
 # Sentiment Analysis
 st.subheader("Sentiment Analysis")
-articles = get_news(selected_stock, TODAY, TODAY)
+articles = get_news(selected_stock)
 avg_sentiment = analyze_sentiment(articles)
 st.write(f"Average Sentiment Score: {avg_sentiment:.2f}")
 
@@ -99,16 +89,3 @@ if articles:
         st.write(article['description'])
         st.write(f"Sentiment Score: {analyzer.polarity_scores(article['description'])['compound']:.2f}")
 
-# Historical Sentiment Analysis
-st.subheader("Historical Sentiment Trends")
-historical_start_date = (pd.to_datetime(TODAY) - pd.DateOffset(days=180)).strftime('%Y-%m-%d')
-historical_sentiment_df = analyze_historical_sentiment(selected_stock, historical_start_date, TODAY)
-
-if not historical_sentiment_df.empty:
-    st.write(historical_sentiment_df)
-    fig2 = go.Figure()
-    fig2.add_trace(go.Scatter(x=historical_sentiment_df['date'], y=historical_sentiment_df['sentiment'], mode='lines+markers'))
-    fig2.update_layout(title_text="Historical Sentiment Trends", xaxis_title="Date", yaxis_title="Sentiment Score")
-    st.plotly_chart(fig2)
-else:
-    st.write("No historical sentiment data available.")
