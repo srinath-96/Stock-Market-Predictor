@@ -1,3 +1,6 @@
+
+import numpy as np
+np.float_ = np.float64
 import streamlit as st
 import yfinance as yf
 from prophet import Prophet
