@@ -1,67 +1,70 @@
-
-import numpy as np
 import streamlit as st
+from datetime import date
 import yfinance as yf
 from prophet import Prophet
-
 from prophet.plot import plot_plotly
-import plotly.graph_objects as go
+from plotly import graph_objs as go
+import plotly.express as px
+import pandas as pd
+import matplotlib.pyplot as plt
 
-# Streamlit app title
-st.title('Stock Prediction App for Major Companies')
+START = "2014-01-01"
+TODAY = date.today().strftime("%Y-%m-%d")
 
-# Dropdown menu for selecting the stock
-stocks = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
-selected_stock = st.selectbox('Select Stock', stocks)
+st.title("StockPredictPy")
 
-# Dropdown menu for selecting the time interval
-intervals = {
-    "1 Month": "1mo",
-    "3 Months": "3mo",
-    "6 Months": "6mo",
-    "1 Year": "1y"
-}
-selected_interval = st.selectbox('Select Time Interval', list(intervals.keys()))
 
-# Input for the forecast period
-forecast_period = st.number_input('Enter number of days to predict', min_value=1, max_value=365, value=30)
+stocks = ("AAPL", "GOOG", "MSFT", "GME", "AMZN", "TSLA", "BTC-USD", "ETH-USD", "DOGE-USD", "ADA-USD", "XRP-USD", "A", "AA", "AACG", "AACI", "AAGR", "AAL", "AAMC", "AAME", "AAN", "AAOI", "AAON", "AAP", "AAPL", "AAT", "AAU", "AAWW", "AB", "ABB", "ABBV", "ABC", "ABCB", "ABCL", "ABCM", "ABEO", "ABEV", "ABG", "ABIO", "ABM", "ABMD", "ABNB", "ABOS", "ABR", "ABST", "ABT", "ABTX", "ABUS", "AC", "ACA", "ACAC", "ACAD", "ACAH", "ACB", "ACBI", "ACC", "ACCD", "ACCO", "ACEL", "ACER", "ACET", "ACEV", "ACGL", "ACH", "ACHC", "ACHL", "ACHV", "ACI", "ACIA", "ACIC", "ACII", "ACIU", "ACIW", "ACKIT", "ACLS", "ACM", "ACMR", "ACN", "ACNB", "ACND", "ACOR", "ACP", "ACR", "ACRE", "ACRS", "ACRX", "ACST", "ACTC", "ACTG", "ACU", "ACV", "ACVA", "ACVF", "ACVX", "ACWI", "ACWX", "ACXM", "ACY", "ADAG", "ADAP", "ADBE", "ADC", "ADCT", "ADES", "ADEX", "ADF", "ADFI", "ADI", "ADIL", "ADM", "ADMA", "ADME", "ADMP", "ADMS", "ADN", "ADNT", "ADOC", "ADP", "ADPT", "ADRA", "ADRO", "ADS", "ADSK", "ADT", "ADTN", "ADTX", "ADUS", "ADV", "ADVM", "ADX", "ADXS", "AE", "AEE", "AEG", "AEGN", "AEHL", "AEHR", "AEI", "AEIS", "AEL", "AEM", "AEMD", "AEO", "AEP", "AER","ZYME", "ZYNE", "ZYXI", "ZZ", "ZZZ","ZETA", "ZEO", "ZEUS")
+selected_stock = st.selectbox("Select dataset for prediction", stocks)
 
-# Fetch the historical data when the user inputs a ticker
-if selected_stock and selected_interval:
-    # Display a loading spinner while fetching data
-    with st.spinner(f'Fetching data for {selected_stock}...'):
-        data = yf.download(selected_stock, period=intervals[selected_interval], interval="1d")
-        
-        if not data.empty:
-            # Prepare data for Prophet
-            df = data.reset_index()[['Date', 'Close']]
-            df.columns = ['ds', 'y']
-            # Explicitly cast 'y' to float64
-            df['y'] = df['y'].astype('float64')
-            # Display raw data
-            st.subheader(f'{selected_stock} - Last {selected_interval} of Data')
-            st.write(df.tail())
-            
-            # Train the Prophet model
-            model = Prophet()
-            model.fit(df)
-            
-            # Create a dataframe for future predictions
-            future = model.make_future_dataframe(periods=forecast_period)
-            forecast = model.predict(future)
-            
-            # Display forecasted data
-            st.subheader(f'Forecast for the next {forecast_period} days')
-            st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
-            
-            # Plot the forecast
-            st.subheader('Forecast Plot')
-            fig1 = plot_plotly(model, forecast)
-            st.plotly_chart(fig1)
-            
-            # Plot the forecast components
-            st.subheader('Forecast Components')
-            fig2 = model.plot_components(forecast)
-            st.write(fig2)
-        else:
-            st.error(f"No data found for ticker {selected_stock}. Please try a different ticker.")
+def load_data(ticker):
+    data = yf.download(ticker, START, TODAY)
+    data.reset_index(inplace=True)
+    return data
+
+data_load_state = st.text("Load data...")
+data = load_data(selected_stock)
+data_load_state.text("Loading data...done!")
+
+
+st.markdown("""
+    <style>
+    .css-1l06vq2 {
+        width: 2000px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.subheader('Details')
+st.write(data.tail())
+
+def plot_raw_data():
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="stock_open"))
+    fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="stock_close"))
+    fig.layout.update(title_text="Time Series data with Rangeslider", xaxis_rangeslider_visible=True)
+    st.plotly_chart(fig)
+
+plot_raw_data()
+
+n_years = st.slider("Years of prediction:", 1, 4)
+period = n_years * 365
+
+df_train = data[['Date', 'Close']]
+df_train = df_train.rename(columns={"Date": "ds", "Close": "y"})
+
+m = Prophet()
+m.fit(df_train)
+future = m.make_future_dataframe(periods=period)
+forecast = m.predict(future)
+
+st.subheader('Forecast data')
+st.write(forecast.tail())
+
+st.write('Forecast Data')
+fig1 = plot_plotly(m, forecast)
+st.plotly_chart(fig1)
+
+st.write('Forecast Components')
+fig2 = m.plot_components(forecast)
+st.write(fig2)
