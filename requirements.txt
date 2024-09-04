@@ -3,7 +3,10 @@ plotly
 pandas
 matplotlib
 yfinance
-numpy<2.
+numpy<2.0
 statsmodels
 requests
 nltk
+vaderSentiment 
+textblob 
+google-cloud-language
