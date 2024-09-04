@@ -28,7 +28,7 @@ def load_data(ticker):
 
 # Function to fetch historical news data
 def get_news(stock_symbol, start_date, end_date):
-    api_key = "your_news_api_key"  # Replace with your NewsAPI key
+    api_key = "a3d435ee70484c19b4fdc4b3e537d9fd"  # Replace with your NewsAPI key
     url = f"https://newsapi.org/v2/everything?q={stock_symbol}&from={start_date}&to={end_date}&sortBy=publishedAt&apiKey={api_key}"
     response = requests.get(url)
     articles = response.json().get('articles', [])
