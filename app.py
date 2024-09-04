@@ -1,91 +1,133 @@
 import streamlit as st
+from datetime import date
 import yfinance as yf
 from prophet import Prophet
 from prophet.plot import plot_plotly
+from plotly import graph_objs as go
 import pandas as pd
-import requests
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+import matplotlib.pyplot as plt
 from statsmodels.tsa.arima.model import ARIMA
-import plotly.graph_objs as go
+import numpy as np
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import requests
 
-# Configuration
+nltk.download('vader_lexicon')
+
+# Set up API key for NewsAPI
+NEWS_API_KEY = 'a3d435ee70484c19b4fdc4b3e537d9fd'  # Replace with your actual NewsAPI key
+NEWS_API_URL = 'https://newsapi.org/v2/everything'
+
 START = "2014-01-01"
-TODAY = pd.to_datetime("today").strftime("%Y-%m-%d")
-STOCKS = ["AAPL", "GOOGL", "MSFT", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "JPM", "V"]
+TODAY = date.today().strftime("%Y-%m-%d")
 
-# Initialize Sentiment Analyzer
-analyzer = SentimentIntensityAnalyzer()
+st.title("StockPredictPy with Sentiment Analysis")
 
-# Function to load stock data
+stocks = ("AAPL", "GOOG", "MSFT", "GME", "AMZN", "TSLA", "BTC-USD", "ETH-USD", "DOGE-USD", "ADA-USD", "XRP-USD", "A", "AA", "AACG", "AACI", "AAGR", "AAL", "AAMC", "AAME", "AAN", "AAOI", "AAON", "AAP", "AAPL", "AAT", "AAU", "AAWW", "AB", "ABB", "ABBV", "ABC", "ABCB", "ABCL", "ABCM", "ABEO", "ABEV", "ABG", "ABIO", "ABM", "ABMD", "ABNB", "ABOS", "ABR", "ABST", "ABT", "ABTX", "ABUS", "AC", "ACA", "ACAC", "ACAD", "ACAH", "ACB", "ACBI", "ACC", "ACCD", "ACCO", "ACEL", "ACER", "ACET", "ACEV", "ACGL", "ACH", "ACHC", "ACHL", "ACHV", "ACI", "ACIA", "ACIC", "ACII", "ACIU", "ACIW", "ACKIT", "ACLS", "ACM", "ACMR", "ACN", "ACNB", "ACND", "ACOR", "ACP", "ACR", "ACRE", "ACRS", "ACRX", "ACST", "ACTC", "ACTG", "ACU", "ACV", "ACVA", "ACVF", "ACVX", "ACWI", "ACWX", "ACXM", "ACY", "ADAG", "ADAP", "ADBE", "ADC", "ADCT", "ADES", "ADEX", "ADF", "ADFI", "ADI", "ADIL", "ADM", "ADMA", "ADME", "ADMP", "ADMS", "ADN", "ADNT", "ADOC", "ADP", "ADPT", "ADRA", "ADRO", "ADS", "ADSK", "ADT", "ADTN", "ADTX", "ADUS", "ADV", "ADVM", "ADX", "ADXS", "AE", "AEE", "AEG", "AEGN", "AEHL", "AEHR", "AEI", "AEIS", "AEL", "AEM", "AEMD", "AEO", "AEP", "AER","ZYME", "ZYNE", "ZYXI", "ZZ", "ZZZ","ZETA", "ZEO", "ZEUS")
+selected_stock = st.selectbox("Select dataset for prediction", stocks)
+model_type = st.selectbox("Select Model", ("Prophet", "ARIMA"))
+
+# Function to fetch real-time news headlines using NewsAPI
+def get_news_headlines(ticker):
+    params = {
+        'q': ticker,
+        'apiKey': NEWS_API_KEY,
+        'language': 'en',
+        'sortBy': 'relevancy',
+        'pageSize': 5
+    }
+    response = requests.get(NEWS_API_URL, params=params)
+    articles = response.json().get('articles', [])
+    headlines = [article['title'] for article in articles]
+    return " ".join(headlines)
+
+# Example sentiment analysis function
+def sentiment_analysis(text):
+    sid = SentimentIntensityAnalyzer()
+    sentiment = sid.polarity_scores(text)
+    return sentiment
+
 def load_data(ticker):
     data = yf.download(ticker, START, TODAY)
     data.reset_index(inplace=True)
     return data
 
-# Function to fetch news
-def get_news(stock_symbol):
-    api_key = "a3d435ee70484c19b4fdc4b3e537d9fd"  # Replace with your NewsAPI key
-    url = f"https://newsapi.org/v2/everything?q={stock_symbol}&sortBy=publishedAt&apiKey={api_key}"
-    response = requests.get(url)
-    articles = response.json().get('articles', [])
-    return articles
-
-# Function to perform sentiment analysis
-def analyze_sentiment(articles):
-    sentiments = [analyzer.polarity_scores(article['description'])['compound'] for article in articles if article['description']]
-    return sum(sentiments) / len(sentiments) if sentiments else 0
-
-# Streamlit App
-st.title("Stock Market Predictor and Sentiment Analyzer")
-
-selected_stock = st.selectbox("Select a stock for prediction", STOCKS)
-
+data_load_state = st.text("Loading data...")
 data = load_data(selected_stock)
+data_load_state.text("Loading data...done!")
+
+st.markdown("""
+    <style>
+    .css-1l06vq2 {
+        width: 2000px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.subheader('Details')
 st.write(data.tail())
 
-# Plot raw data
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="Open"))
-fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="Close"))
-fig.update_layout(title_text="Stock Price Over Time", xaxis_rangeslider_visible=True)
-st.plotly_chart(fig)
+# Sentiment Analysis Section
+st.subheader('Sentiment Analysis')
+news = get_news_headlines(selected_stock)
+sentiment = sentiment_analysis(news)
+st.write(f"Sentiment for {selected_stock}: ", sentiment)
 
-# Forecasting with Prophet
+def plot_raw_data():
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="stock_open"))
+    fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="stock_close"))
+    fig.layout.update(title_text="Time Series data with Rangeslider", xaxis_rangeslider_visible=True)
+    st.plotly_chart(fig)
+
+plot_raw_data()
+
 n_years = st.slider("Years of prediction:", 1, 4)
 period = n_years * 365
 
-df_train = data[['Date', 'Close']].rename(columns={"Date": "ds", "Close": "y"})
-m = Prophet()
-m.fit(df_train)
-future = m.make_future_dataframe(periods=period)
-forecast = m.predict(future)
+# Model selection and prediction
+if model_type == "Prophet":
+    df_train = data[['Date', 'Close']]
+    df_train = df_train.rename(columns={"Date": "ds", "Close": "y"})
 
-st.subheader('Forecast data')
-st.write(forecast.tail())
-st.write('Forecast Plot')
-fig1 = plot_plotly(m, forecast)
-st.plotly_chart(fig1)
+    m = Prophet()
+    m.fit(df_train)
+    future = m.make_future_dataframe(periods=period)
+    forecast = m.predict(future)
 
-# Forecasting with ARIMA
-st.subheader("ARIMA Forecast")
-model = ARIMA(df_train['y'], order=(5,1,0))
-model_fit = model.fit()
-forecast_arima = model_fit.forecast(steps=period)
-forecast_arima_df = pd.DataFrame({
-    'Date': pd.date_range(start=data['Date'].max(), periods=period+1, closed='right'),
-    'Forecast': forecast_arima
-})
-st.line_chart(forecast_arima_df.set_index('Date'))
+    st.subheader('Forecast data')
+    st.write(forecast.tail())
 
-# Sentiment Analysis
-st.subheader("Sentiment Analysis")
-articles = get_news(selected_stock)
-avg_sentiment = analyze_sentiment(articles)
-st.write(f"Average Sentiment Score: {avg_sentiment:.2f}")
+    st.write('Forecast Data')
+    fig1 = plot_plotly(m, forecast)
+    st.plotly_chart(fig1)
 
-if articles:
-    for article in articles[:5]:
-        st.write(f"**{article['title']}**")
-        st.write(article['description'])
-        st.write(f"Sentiment Score: {analyzer.polarity_scores(article['description'])['compound']:.2f}")
+    st.write('Forecast Components')
+    fig2 = m.plot_components(forecast)
+    st.write(fig2)
 
+elif model_type == "ARIMA":
+    df_train = data[['Date', 'Close']]
+    df_train.set_index('Date', inplace=True)
+
+    # Fit ARIMA model
+    model = ARIMA(df_train, order=(5, 1, 0))
+    model_fit = model.fit()
+    st.subheader('ARIMA Model Summary')
+    st.text(model_fit.summary())
+
+    # Forecast
+    forecast = model_fit.forecast(steps=period)
+    forecast_dates = pd.date_range(start=df_train.index[-1], periods=period)
+    forecast_df = pd.DataFrame({'Date': forecast_dates, 'Close': forecast})
+    forecast_df.set_index('Date', inplace=True)
+
+    st.subheader('Forecast data')
+    st.write(forecast_df.tail())
+
+    # Plot ARIMA forecast
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df_train.index, y=df_train['Close'], name="Actual"))
+    fig.add_trace(go.Scatter(x=forecast_df.index, y=forecast_df['Close'], name="Forecast"))
+    fig.layout.update(title_text="ARIMA Forecast", xaxis_rangeslider_visible=True)
+    st.plotly_chart(fig)
