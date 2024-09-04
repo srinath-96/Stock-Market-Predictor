@@ -4,22 +4,6 @@ import streamlit as st
 import yfinance as yf
 from prophet import Prophet
 
-
-def patched_fourier_series(dates, period, series_order):
-    """Replacement for the original method to avoid np.float_."""
-    t = np.array(
-        (dates - dates.min()).dt.total_seconds().astype(np.float64)
-    )
-    return np.column_stack([
-        fun((2.0 * (i + 1) * np.pi * t / period)) for i in range(series_order)
-        for fun in (np.sin, np.cos)
-    ])
-
-# Apply the patch
-Prophet.fourier_series = patched_fourier_series
-
-from prophet.plot import plot_plotly
-import plotly.graph_objects as go
 from prophet.plot import plot_plotly
 import plotly.graph_objects as go
 
