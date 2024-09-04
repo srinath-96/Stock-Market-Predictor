@@ -1,8 +1,6 @@
-datetime
 prophet
 plotly
 pandas
 matplotlib
-stocknews
 yfinance
 numpy<1.24
