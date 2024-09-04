@@ -1,6 +1,6 @@
-streamlit
+streamlit==1.38.0
 yfinance
 prophet==1.1
-pandas
-plotly
 numpy<2.0
+plotly
+pandas
