@@ -1,7 +1,9 @@
-prophet
+uprophet
 plotly
 pandas
 matplotlib
 yfinance
 numpy<2.
 statsmodels
+requests
+nltk
