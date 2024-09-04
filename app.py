@@ -8,15 +8,44 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from statsmodels.tsa.arima.model import ARIMA
 import numpy as np
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import requests
+
+nltk.download('vader_lexicon')
+
+# Set up API key for NewsAPI
+NEWS_API_KEY = 'your_newsapi_key_here'  # Replace with your actual NewsAPI key
+NEWS_API_URL = 'https://newsapi.org/v2/everything'
 
 START = "2014-01-01"
 TODAY = date.today().strftime("%Y-%m-%d")
 
-st.title("StockPredictPy")
+st.title("StockPredictPy with Sentiment Analysis")
 
 stocks = ("AAPL", "GOOG", "MSFT", "GME", "AMZN", "TSLA", "BTC-USD", "ETH-USD", "DOGE-USD", "ADA-USD", "XRP-USD", "A", "AA", "AACG", "AACI", "AAGR", "AAL", "AAMC", "AAME", "AAN", "AAOI", "AAON", "AAP", "AAPL", "AAT", "AAU", "AAWW", "AB", "ABB", "ABBV", "ABC", "ABCB", "ABCL", "ABCM", "ABEO", "ABEV", "ABG", "ABIO", "ABM", "ABMD", "ABNB", "ABOS", "ABR", "ABST", "ABT", "ABTX", "ABUS", "AC", "ACA", "ACAC", "ACAD", "ACAH", "ACB", "ACBI", "ACC", "ACCD", "ACCO", "ACEL", "ACER", "ACET", "ACEV", "ACGL", "ACH", "ACHC", "ACHL", "ACHV", "ACI", "ACIA", "ACIC", "ACII", "ACIU", "ACIW", "ACKIT", "ACLS", "ACM", "ACMR", "ACN", "ACNB", "ACND", "ACOR", "ACP", "ACR", "ACRE", "ACRS", "ACRX", "ACST", "ACTC", "ACTG", "ACU", "ACV", "ACVA", "ACVF", "ACVX", "ACWI", "ACWX", "ACXM", "ACY", "ADAG", "ADAP", "ADBE", "ADC", "ADCT", "ADES", "ADEX", "ADF", "ADFI", "ADI", "ADIL", "ADM", "ADMA", "ADME", "ADMP", "ADMS", "ADN", "ADNT", "ADOC", "ADP", "ADPT", "ADRA", "ADRO", "ADS", "ADSK", "ADT", "ADTN", "ADTX", "ADUS", "ADV", "ADVM", "ADX", "ADXS", "AE", "AEE", "AEG", "AEGN", "AEHL", "AEHR", "AEI", "AEIS", "AEL", "AEM", "AEMD", "AEO", "AEP", "AER","ZYME", "ZYNE", "ZYXI", "ZZ", "ZZZ","ZETA", "ZEO", "ZEUS")
 selected_stock = st.selectbox("Select dataset for prediction", stocks)
 model_type = st.selectbox("Select Model", ("Prophet", "ARIMA"))
+
+# Function to fetch real-time news headlines using NewsAPI
+def get_news_headlines(ticker):
+    params = {
+        'q': ticker,
+        'apiKey': NEWS_API_KEY,
+        'language': 'en',
+        'sortBy': 'relevancy',
+        'pageSize': 5
+    }
+    response = requests.get(NEWS_API_URL, params=params)
+    articles = response.json().get('articles', [])
+    headlines = [article['title'] for article in articles]
+    return " ".join(headlines)
+
+# Example sentiment analysis function
+def sentiment_analysis(text):
+    sid = SentimentIntensityAnalyzer()
+    sentiment = sid.polarity_scores(text)
+    return sentiment
 
 def load_data(ticker):
     data = yf.download(ticker, START, TODAY)
@@ -37,6 +66,12 @@ st.markdown("""
 
 st.subheader('Details')
 st.write(data.tail())
+
+# Sentiment Analysis Section
+st.subheader('Sentiment Analysis')
+news = get_news_headlines(selected_stock)
+sentiment = sentiment_analysis(news)
+st.write(f"Sentiment for {selected_stock}: ", sentiment)
 
 def plot_raw_data():
     fig = go.Figure()
